@@ -190,7 +190,18 @@ function Model(config) {
         }
         return self.getIndex(attr).then(function(ilist) {
             if (ilist && ilist[value]) {
-                return json.extend(true, {}, ilist[value]);
+                var unsyncedCopyData = self.unsyncedItems().then(
+                        return function(unsyncedItems) {
+                            var matches = unsyncedItems.filter(function(item) {
+                                return item.data[attr] === value;
+                            });
+                            if (matches.length > 0) {
+                                return matches[0].data;
+                            } else {
+                                return {};
+                            }
+                        });
+                return json.extend(true, {}, ilist[value], unsyncedCopyData);
             } else if (attr == "id" && value !== undefined) {
                 // Not found in local list; try server
                 if (!localOnly && self.opts.server && config.url) {

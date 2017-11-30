@@ -203,6 +203,34 @@ function Model(config) {
         });
     };
 
+    self.find_with_unsynced = function(value, attr, localOnly, withData) {
+        return self.find(value, attr, localOnly).then(function(item) {
+            if (item == null) {
+                return self.unsyncedItems(withData).then(function(unsynced_items) {
+                    if (!attr) {
+                        attr = 'id';
+                    }
+                    if (self.store.debugLookup) {
+                        console.log('not found, trying in unsynced');
+                    }
+                    item = unsynced_items.find(function(unsynced) {
+                        var value_here = (attr == 'id')?
+                            'outbox-' + unsynced.id : unsynced.data[attr];
+                        if (value_here == value) {
+                            return true;
+                        }
+                    });
+                    if (item) {
+                        var result = item.data;
+                        result.id = 'outbox-' + item.id;
+                        return result;
+                    }
+
+                });
+            } else return item;
+        });
+    };
+
     // Filter an array of objects by one or more attributes
     self.filterPage = function(filter, any, localOnly) {
 

@@ -266,22 +266,38 @@ function _Outbox(store) {
                 item.retryCount++;
             }
             return self.updateModels(item, result).then(function() {
-                return self.model.filter({'parents': item.id});
-            }).then(function(relItems) {
-                 return Promise.all(relItems.map(_loadItemData));
-            }).then(function(relItems) {
-                relItems.forEach(function(relItem) {
-                    relItem.parents = relItem.parents.filter(function(p) {
-                        return p != item.id;
+                // update unsynced items before any updates land there
+                return self.unsyncedItems().then(function(relItems) {
+                    relItems.forEach(function(relItem) {
+                        Object.keys(relItem.data).forEach(function(key) {
+                            if (relItem.data[key] === 'outbox-' + item.id) {
+                                if (self.debugValues) {
+                                    console.log('adjusting foreign key in outbox item',
+                                        relItem, key, result.id);
+                                }
+                                relItem.data[key] = result.id;
+                            }
+                        });
                     });
-                    Object.keys(relItem.data).forEach(function(key) {
-                        if (relItem.data[key] === 'outbox-' + item.id) {
-                            relItem.data[key] = result.id;
-                        }
+                    return self.model.update(relItems);
+                }).then(function() {
+                    return self.model.filter({'parents': item.id}).then(function(relItems) {
+                        return Promise.all(relItems.map(_loadItemData));
+                    }).then(function(relItems) {
+                        relItems.forEach(function(relItem) {
+                            relItem.parents = relItem.parents.filter(function(p) {
+                                return p != item.id;
+                            });
+                            Object.keys(relItem.data).forEach(function(key) {
+                                if (relItem.data[key] === 'outbox-' + item.id) {
+                                    relItem.data[key] = result.id;
+                                }
+                            });
+                        });
+                        relItems.push(_withoutData(item));
+                        return self.model.update(relItems);
                     });
                 });
-                relItems.push(_withoutData(item));
-                return self.model.update(relItems);
             }).then(function() {
                 return item;
             });

@@ -373,18 +373,19 @@ app.sync = function(retryAll) {
     });
 };
 
-app.emptyOutbox = function(confirmFirst) {
+app.emptyOutbox = function(confirmFirst, message) {
     /* global confirm */
     if (confirmFirst) {
+        message = message || 'Empty Outbox?';
         if (navigator.notification && navigator.notification.confirm) {
-            navigator.notification.confirm('Empty Outbox?', function(button) {
+            navigator.notification.confirm(message, function(button) {
                 if (button == 1) {
                     app.emptyOutbox();
                 }
             });
             return;
         } else {
-            if (!confirm('Empty Outbox?')) {
+            if (!confirm(message)) {
                 return;
             }
         }

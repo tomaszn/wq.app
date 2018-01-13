@@ -18,7 +18,7 @@ Library                 |  Version  |  Notes
 [d3.js]                 |    4.2.6  |  
 [esri-leaflet]          |    2.0.8  |
 [highlight.js]          |    9.7.0  |  `node tools/build.js -t amd -n bash css javascript markdown python scss xml`
-[jquery]                |   1.11.3  |  
+[jquery]                |   1.12.4  |
 [jquery.mobile]         |    1.4.5  |  custom deps to ensure router loads first; `autoInitializePage: false`
 [jquery.mobile.router]  |  443d352  |  
 [json-forms]            |  d22b545  |  wrapped as AMD module; split JSONEncode into two functions; disable unneeded isFile code

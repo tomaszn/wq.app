@@ -12,22 +12,22 @@ function(jqm) {
 var spin = {};
 
 spin.start = function(msg, duration, opts) {
-    if (!opts) {
-        opts = {};
-    }
-    if (msg) {
-        opts.text = msg;
-        opts.textVisible = true;
-    }
-    jqm.loading('show', opts);
-
-    if (duration) {
-        setTimeout(spin.stop, duration * 1000);
-    }
+//    if (!opts) {
+//        opts = {};
+//    }
+//    if (msg) {
+//        opts.text = msg;
+//        opts.textVisible = true;
+//    }
+//    jqm.loading('show', opts);
+//
+//    if (duration) {
+//        setTimeout(spin.stop, duration * 1000);
+//    }
 };
 
 spin.stop = function() {
-    jqm.loading('hide');
+//    jqm.loading('hide');
 };
 
 return spin;

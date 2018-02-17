@@ -253,78 +253,86 @@ function _Outbox(store) {
             contentType: useFormData ? false : undefined,
             async: true,
             headers: headers
-        })).then(success, error);
+        })).then(sendItemSuccess, sendItemError);
 
-        function success(result) {
+        function sendItemSuccess(result) {
             if (self.debugNetwork) {
                 console.log("Item successfully sent to " + url);
             }
-            self.applyResult(item, result);
-            if (!item.synced) {
-                // sendItem did not result in sync
-                item.retryCount = item.retryCount || 0;
-                item.retryCount++;
+            return self._sendItemSuccessProcess(item, result);
+        }
+
+        function sendItemError(jqxhr) {
+            if (self.debugNetwork) {
+                console.warn("Error sending item to " + url);
             }
-            return self.updateModels(item, result).then(function() {
-                // update unsynced items before any updates land there
-                return self.unsyncedItems().then(function(relItems) {
+            return self._sendItemErrorProcess(jqxhr, item, once);
+        }
+    };
+
+    self._sendItemSuccessProcess = function(item, result) {
+        self.applyResult(item, result);
+        if (!item.synced) {
+            // sendItem did not result in sync
+            item.retryCount = item.retryCount || 0;
+            item.retryCount++;
+        }
+        return self.updateModels(item, result).then(function() {
+            // update unsynced items before any updates land there
+            return self.unsyncedItems().then(function(relItems) {
+                relItems.forEach(function(relItem) {
+                    Object.keys(relItem.data).forEach(function(key) {
+                        if (relItem.data[key] === 'outbox-' + item.id) {
+                            if (self.debugValues) {
+                                console.log('adjusting foreign key in outbox item',
+                                    relItem, key, result.id);
+                            }
+                            relItem.data[key] = result.id;
+                        }
+                    });
+                });
+                return self.model.update(relItems);
+            }).then(function() {
+                return self.model.filter({'parents': item.id}).then(function(relItems) {
+                    return Promise.all(relItems.map(_loadItemData));
+                }).then(function(relItems) {
                     relItems.forEach(function(relItem) {
+                        relItem.parents = relItem.parents.filter(function(p) {
+                            return p != item.id;
+                        });
                         Object.keys(relItem.data).forEach(function(key) {
                             if (relItem.data[key] === 'outbox-' + item.id) {
-                                if (self.debugValues) {
-                                    console.log('adjusting foreign key in outbox item',
-                                        relItem, key, result.id);
-                                }
                                 relItem.data[key] = result.id;
                             }
                         });
                     });
+                    relItems.push(_withoutData(item));
                     return self.model.update(relItems);
-                }).then(function() {
-                    return self.model.filter({'parents': item.id}).then(function(relItems) {
-                        return Promise.all(relItems.map(_loadItemData));
-                    }).then(function(relItems) {
-                        relItems.forEach(function(relItem) {
-                            relItem.parents = relItem.parents.filter(function(p) {
-                                return p != item.id;
-                            });
-                            Object.keys(relItem.data).forEach(function(key) {
-                                if (relItem.data[key] === 'outbox-' + item.id) {
-                                    relItem.data[key] = result.id;
-                                }
-                            });
-                        });
-                        relItems.push(_withoutData(item));
-                        return self.model.update(relItems);
-                    });
                 });
-            }).then(function() {
-                return item;
             });
-        }
+        }).then(function() {
+            return item;
+        });
+    };
 
-        function error(jqxhr) {
-            if (self.debugNetwork) {
-                console.warn("Error sending item to " + url);
+    self._sendItemErrorProcess = function(jqxhr, item, once) {
+        if (jqxhr.responseText) {
+            try {
+                item.error = JSON.parse(jqxhr.responseText);
+            } catch (e) {
+                item.error = jqxhr.responseText;
             }
-            if (jqxhr.responseText) {
-                try {
-                    item.error = JSON.parse(jqxhr.responseText);
-                } catch (e) {
-                    item.error = jqxhr.responseText;
-                }
-            } else {
-                item.error = jqxhr.status;
-            }
-            if (once) {
-                item.locked = true;
-            }
-            item.retryCount = item.retryCount || 0;
-            item.retryCount++;
-            return self.model.update([_withoutData(item)]).then(function() {
-                return item;
-            });
+        } else {
+            item.error = jqxhr.status;
         }
+        if (once) {
+            item.locked = true;
+        }
+        item.retryCount = item.retryCount || 0;
+        item.retryCount++;
+        return self.model.update([_withoutData(item)]).then(function() {
+            return item;
+        });
     };
 
     // Send all unsynced items, using batch service if available

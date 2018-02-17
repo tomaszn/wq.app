@@ -460,13 +460,6 @@ function _Outbox(store) {
                         return item.id == a.id; })[0];
                     a.data = updated.data;
                     return self.sendItem(a).then(function(item) {
-                        if (item && !item.synced) {
-                            // sendItem did not result in sync
-                            item.retryCount = item.retryCount || 0;
-                            item.retryCount++;
-                        }
-                        return item;
-                    }).then(function(item) {
                         return self.model.update([item]);
                     });
                 });

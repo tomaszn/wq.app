@@ -343,52 +343,91 @@ function _Outbox(store) {
 
         // Utilize batch service if it exists
         if (self.batchService) {
-            return result.then(self.sendBatch);
+            return result.then(self.sendBatchGeneric);
         } else {
             return result.then(self.sendItems);
         }
     };
 
-    // Send items to a batch service on the server
-    self.sendBatch = function(items) {
+    // Send items in sequence and retrieve results
+    // based on: https://hackernoon.com/functional-javascript-resolving-promises-sequentially-7aac18c4431e
+    // coverted with: https://closure-compiler.appspot.com
+    var promiseSerial = function(funcs) {
+        return funcs.reduce(function(promise, func) {
+            return promise.then(function(result) {
+                return func().then(Array.prototype.concat.bind(result));
+            });
+        }, Promise.resolve([]));
+    };
+
+    // Send items to a django-batch-requests endpoint on the server
+    self.sendBatchGeneric = function(items) {
         if (!items.length) {
             return Promise.resolve(items);
         }
 
-        var data = [];
+        var masterRequest = [];
+
+        // Use current CSRF token in case it's changed since item was saved
+        var csrftoken = self.csrftoken || options.csrftoken;
+
         items.forEach(function(item) {
-            data.push(item.data);
+            // Update CSRF token if it changed
+            item[self.csrftokenField] = csrftoken;
+            masterRequest.push({
+                url: '/' + item.options.url.replace(/\/$/, "") + '.json',
+                method: item.options.method,
+                headers: {
+                    'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
+                    'X-CSRFToken': csrftoken
+                },
+                body: json.param(item.data)
+            });
         });
 
+        function genericBatchSuccess(r) {
+            var results = self.parseBatchResult(r);
+            if (!results || results.length != items.length) {
+                if (self.debugNetwork) {
+                    console.log("BATCH: failed");
+                }
+                return null;
+            } else if (self.debugNetwork) {
+                console.log("BATCH: got responses for all items");
+            }
+
+            // Apply sync results to individual items
+            var funcs = items.map(function(item, i) {
+                return function() {
+                    var batchResult = results[i];
+                    // POST results in 201 Created, PUT results in 200 OK
+                    if (batchResult.status_code == 201 || batchResult.status_code == 200) {
+                        var result = JSON.parse(batchResult.body);
+                        return self._sendItemSuccessProcess(item, result);
+                    } else {
+                        var fake_jqxhr = {
+                            status: batchResult.status_code,
+                            responseText: JSON.parse(batchResult.body)['detail']
+                        };
+                        return self._sendItemErrorProcess(fake_jqxhr, item, true);
+                    }
+                };
+            });
+
+            return promiseSerial(funcs).then(function(sentItems) {
+                console.log('sentItems after batch result processing', sentItems);
+                // Reload data and return final result
+                return sentItems;
+            });
+        }
+
         return Promise.resolve($.ajax(self.batchService, {
-            data: JSON.stringify(data),
+            data: JSON.stringify(masterRequest),
             type: "POST",
             dataType: "json",
             contentType: "application/json",
             async: true
-        })).then(function(r) {
-            var results = self.parseBatchResult(r);
-            if (!results || results.length != items.length) {
-                return null;
-            }
-
-            // Apply sync results to individual items
-            results.forEach(function(result, i) {
-                var item = items[i];
-                self.applyResult(item, result);
-                if (!item.synced) {
-                    item.retryCount = item.retryCount || 0;
-                    item.retryCount++;
-                }
-            });
-
-            return self.model.update(items).then(function() {
-                return items;
-            });
-
-        }, function() {
-            return null;
-        });
+        })).then(genericBatchSuccess);
     };
 
     // Get names of models sorted parent-first
@@ -439,17 +478,6 @@ function _Outbox(store) {
         items = items.sort(function(a, b) {
             return a.syncOrder - b.syncOrder;
         });
-
-        // Send items in sequence and retrieve results
-        // based on: https://hackernoon.com/functional-javascript-resolving-promises-sequentially-7aac18c4431e
-        // coverted with: https://closure-compiler.appspot.com
-        var promiseSerial = function(funcs) {
-            return funcs.reduce(function(promise, func) {
-                return promise.then(function(result) {
-                    return func().then(Array.prototype.concat.bind(result));
-                });
-            }, Promise.resolve([]));
-        };
 
         var funcs = items.map(function(a) {
             return function() {

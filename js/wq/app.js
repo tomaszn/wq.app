@@ -1321,15 +1321,6 @@ function _handleForm(evt) {
     ds.get('csrf_token').then(function(token) {
         options.csrftoken = token;
         outbox.save(vals, options, true).then(function(item) {
-            if (backgroundSync) {
-                // Send user to next screen while app syncs in background
-                app.postsave(item, true);
-                if (backgroundSync > 0) {
-                    app.sync();
-                }
-                return;
-            }
-
             // Submit form immediately and wait for server to respond
             $form.attr('data-wq-outbox-id', item.id);
             spin.start();

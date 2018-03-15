@@ -102,20 +102,6 @@ app.init = function(config) {
     tmpl.setDefault('wq_config', app.wq_config);
     tmpl.setDefault('svc', app.service);
 
-    // Option to submit forms in the background rather than wait for each post
-    var seconds;
-    if (config.backgroundSync) {
-        seconds = config.backgroundSync;
-        if (seconds === true) {
-            seconds = 30;
-        }
-        if (seconds > 0) {
-            app._syncInterval = setInterval(function() {
-                app.sync();
-            }, seconds * 1000);
-        }
-    }
-
     // Option to override various hooks
     [
         'postsave',

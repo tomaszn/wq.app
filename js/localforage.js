@@ -2033,7 +2033,8 @@ var DefaultConfig = {
     name: 'localforage',
     // Default DB size is _JUST UNDER_ 5MB, as it's the highest size
     // we can use without a prompt.
-    size: 4980736,
+    // TN: modified from 5MB to 25MB
+    size: 24980736,
     storeName: 'keyvaluepairs',
     version: 1.0
 };

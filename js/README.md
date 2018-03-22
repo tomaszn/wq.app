@@ -26,7 +26,7 @@ Library                 |  Version  |  Notes
 [leaflet.draw]          |    0.4.9  |  wrapped as AMD module
 [leaflet.markercluster] |    1.0.5  |  wrapped as AMD module; `cat *.css > leaflet.markercluster.css`
 [leaflet.wms]           |  1f35421  | 
-[localforage]           |  e3f2218  | [#603]
+[localforage]           |  e3f2218  | [#603], increased default DB size from 4980736 to 24980736
 [memoryStorageDriver]   |  a2396b3  |
 [marked]                |    0.3.6  |  
 [mustache.js]           |    2.2.1  |  

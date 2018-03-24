@@ -530,7 +530,11 @@ function _Outbox(store) {
                 return self.unsyncedItems().then(function(allUnsynced) {
                     var updated = allUnsynced.filter(function(item) {
                         return item.id == a.id; })[0];
-                    a.data = updated.data;
+                    if (!updated || !updated.data) {
+                        console.log('anomalia! updated wyglada tak:', updated);
+                    } else {
+                        a.data = updated.data;
+                    }
                     return self.sendItem(a).then(function(item) {
                         return self.model.update([item]);
                     });
@@ -711,7 +715,15 @@ function _Outbox(store) {
             return Promise.all(
                 newData.list.map(_updateItemData)
             ).then(function(items) {
-                _cleanUpItemData(items);
+                // I can't debug what happens inside:
+                // Uncaught (in promise) DOMException: Failed to read large IndexedDB value
+                // but without it, it slows down with each item sent,
+                // and eventually uses all memory.
+                // Let's run it in 5% of cases...
+                if (Math.random() < 5/100) {
+                    console.log('padlo na uruchomienie _cleanUpItemData, items.length==' + items.length);
+                    _cleanUpItemData(items);
+                }
                 return defaultOverwrite(items);
             });
         };

@@ -465,7 +465,10 @@ function _Outbox(store) {
         });
 
 
-        return promiseSerial(batch_funcs).then(console.log);
+        return promiseSerial(batch_funcs).then(function(item_groups) {
+            // merge results
+            return [].concat.apply([], item_groups);
+        });
     };
 
     // Get names of models sorted parent-first

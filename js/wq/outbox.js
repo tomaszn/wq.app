@@ -366,68 +366,106 @@ function _Outbox(store) {
             return Promise.resolve(items);
         }
 
-        var masterRequest = [];
+        // Assign items model's position in parents-first list
+        var order = self.getModelSyncOrder();
+        if (self.debugNetwork) {
+            console.log('calculated model sync order is ', order);
+        }
 
         // Use current CSRF token in case it's changed since item was saved
         var csrftoken = self.csrftoken || options.csrftoken;
 
-        items.forEach(function(item) {
-            // Update CSRF token if it changed
-            item[self.csrftokenField] = csrftoken;
-            masterRequest.push({
-                url: '/' + item.options.url.replace(/\/$/, "") + '.json',
-                method: item.options.method,
-                headers: {
-                    'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
-                    'X-CSRFToken': csrftoken
-                },
-                body: json.param(item.data)
+        var batch_funcs = order.map(function(modelName, index) {
+            return items.filter(function(item) {
+                return item.options.modelConf.name == modelName;
             });
+        }).filter(function(model_items) {
+            return model_items.length > 0;
+        }).map(function(model_items) {
+
+            function genericBatchSuccess(r) {
+                var results = self.parseBatchResult(r);
+                if (!results || results.length != model_items.length) {
+                    if (self.debugNetwork) {
+                        console.log("BATCH: failed");
+                    }
+                    return null;
+                } else if (self.debugNetwork) {
+                    console.log("BATCH: got responses for all items");
+                }
+
+                // Apply sync results to individual items
+                var funcs = model_items.map(function(item, i) {
+                    return function() {
+                        var batchResult = results[i];
+                        // POST results in 201 Created, PUT results in 200 OK
+                        if (batchResult.status_code == 201 || batchResult.status_code == 200) {
+                            var result = JSON.parse(batchResult.body);
+                            return self._sendItemSuccessProcess(item, result);
+                        } else {
+                            var fake_jqxhr = {
+                                status: batchResult.status_code,
+                                responseText: JSON.parse(batchResult.body)['detail']
+                            };
+                            return self._sendItemErrorProcess(fake_jqxhr, item, true);
+                        }
+                    };
+                });
+
+                return promiseSerial(funcs).then(function(sentItems) {
+                    console.log('sentItems after batch result processing', sentItems);
+                    // Reload data and return final result
+                    return sentItems;
+                });
+            }
+            return function() {
+                // ids to check in updates
+                var model_items_ids = model_items.map(function(item) {
+                    return item.id;
+                });
+
+                // update them from local db, could be updated by syncing its parents
+                // let's fetch it again
+                return self.unsyncedItems().then(function(allUnsynced) {
+                    allUnsynced.forEach(function(updated) {
+                        if (model_items_ids.indexOf(updated.id) > -1) {
+                            // we have it to send now, overwrite .data
+                            model_items.forEach(function(item) {
+                                if (item.id == updated.id) {
+                                    item.data = updated.data;
+                                }
+                            });
+                        }
+                    });
+
+                    // execute batch request
+                    var masterRequest = [];
+                    model_items.forEach(function(item) {
+                        // Update CSRF token if it changed
+                        item[self.csrftokenField] = csrftoken;
+                        masterRequest.push({
+                            url: '/' + item.options.url.replace(/\/$/, "") + '.json',
+                            method: item.options.method,
+                            headers: {
+                                'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
+                                'X-CSRFToken': csrftoken
+                            },
+                            body: json.param(item.data)
+                        });
+                    });
+                    return Promise.resolve($.ajax(self.batchService, {
+                        data: JSON.stringify(masterRequest),
+                        type: "POST",
+                        dataType: "json",
+                        contentType: "application/json",
+                        async: true
+                    })).then(genericBatchSuccess);
+                });
+            };
         });
 
-        function genericBatchSuccess(r) {
-            var results = self.parseBatchResult(r);
-            if (!results || results.length != items.length) {
-                if (self.debugNetwork) {
-                    console.log("BATCH: failed");
-                }
-                return null;
-            } else if (self.debugNetwork) {
-                console.log("BATCH: got responses for all items");
-            }
 
-            // Apply sync results to individual items
-            var funcs = items.map(function(item, i) {
-                return function() {
-                    var batchResult = results[i];
-                    // POST results in 201 Created, PUT results in 200 OK
-                    if (batchResult.status_code == 201 || batchResult.status_code == 200) {
-                        var result = JSON.parse(batchResult.body);
-                        return self._sendItemSuccessProcess(item, result);
-                    } else {
-                        var fake_jqxhr = {
-                            status: batchResult.status_code,
-                            responseText: JSON.parse(batchResult.body)['detail']
-                        };
-                        return self._sendItemErrorProcess(fake_jqxhr, item, true);
-                    }
-                };
-            });
-
-            return promiseSerial(funcs).then(function(sentItems) {
-                console.log('sentItems after batch result processing', sentItems);
-                // Reload data and return final result
-                return sentItems;
-            });
-        }
-
-        return Promise.resolve($.ajax(self.batchService, {
-            data: JSON.stringify(masterRequest),
-            type: "POST",
-            dataType: "json",
-            contentType: "application/json",
-            async: true
-        })).then(genericBatchSuccess);
+        return promiseSerial(batch_funcs).then(console.log);
     };
 
     // Get names of models sorted parent-first

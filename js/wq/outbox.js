@@ -402,6 +402,9 @@ function _Outbox(store) {
                         if (batchResult.status_code == 201 || batchResult.status_code == 200) {
                             var result = JSON.parse(batchResult.body);
                             return self._sendItemSuccessProcess(item, result);
+                        } else if (batchResult.status_code == 204) {
+                            // DELETE results in 204 "No Content"
+                            return self._sendItemSuccessProcess(item, false);
                         } else {
                             var fake_jqxhr = {
                                 status: batchResult.status_code,

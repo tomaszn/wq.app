@@ -203,34 +203,6 @@ function Model(config) {
         });
     };
 
-    self.find_with_unsynced = function(value, attr, localOnly, withData) {
-        return self.find(value, attr, localOnly).then(function(item) {
-            if (item == null) {
-                return self.unsyncedItems(withData).then(function(unsynced_items) {
-                    if (!attr) {
-                        attr = 'id';
-                    }
-                    if (self.store.debugLookup) {
-                        console.log('not found, trying in unsynced');
-                    }
-                    item = unsynced_items.find(function(unsynced) {
-                        var value_here = (attr == 'id')?
-                            'outbox-' + unsynced.id : unsynced.data[attr];
-                        if (value_here == value) {
-                            return true;
-                        }
-                    });
-                    if (item) {
-                        var result = item.data;
-                        result.id = 'outbox-' + item.id;
-                        return result;
-                    }
-
-                });
-            } else return item;
-        });
-    };
-
     // Filter an array of objects by one or more attributes
     self.filterPage = function(filter, any, localOnly) {
 
@@ -387,20 +359,6 @@ function Model(config) {
         return self.store.fetch(q).then(function(data) {
             return self.update(data, idcol);
         });
-    };
-
-    // Unsaved form items related to this list
-    self.unsyncedItems = function(withData) {
-        // Note: wq/outbox needs to have already been loaded for this to work
-        var outbox;
-        try {
-            outbox = require('wq/outbox');
-        } catch(e) {
-            return Promise.resolve([]);
-        }
-        return outbox.getOutbox(
-            self.store
-        ).unsyncedItems(self.query, withData);
     };
 
     // Apply a predefined function to a retreived item

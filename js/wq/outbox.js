@@ -20,6 +20,42 @@ outbox.getOutbox = function(store) {
     }
 };
 
+// plug outbox capabilities into wq/model
+model.Model.prototype.unsyncedItems = function(withData) {
+    return outbox.getOutbox(
+        this.store
+    ).unsyncedItems(this.query, withData);
+};
+
+model.Model.prototype.find_with_unsynced = function(value, attr, localOnly, withData) {
+    var model = this;
+    return model.find(value, attr, localOnly).then(function(item) {
+        if (item == null) {
+            return model.unsyncedItems(withData).then(function(unsynced_items) {
+                if (!attr) {
+                    attr = 'id';
+                }
+                if (model.store.debugLookup) {
+                    console.log('not found, trying in unsynced');
+                }
+                item = unsynced_items.find(function(unsynced) {
+                    var value_here = (attr == 'id')?
+                        'outbox-' + unsynced.id : unsynced.data[attr];
+                    if (value_here == value) {
+                        return true;
+                    }
+                });
+                if (item) {
+                    var result = item.data;
+                    result.id = 'outbox-' + item.id;
+                    return result;
+                }
+
+            });
+        } else return item;
+    });
+};
+
 return outbox;
 
 function _Outbox(store) {

@@ -2,8 +2,6 @@ from wq.core import wq
 import click
 
 import os
-import subprocess
-import random
 import json
 
 import scss as pyScss
@@ -11,6 +9,8 @@ import logging
 import pystache
 
 from .collect import readfiles
+import requirejs
+from babeljs import transformer as babeljs
 
 
 @wq.command()
@@ -27,23 +27,59 @@ def optimize(config):
         raise click.UsageError(
             "optimize section not found in %s" % config.filename
         )
-    outdir = conf.get('dir', None)
-
-    bfile = "rjsconf%s" % (random.random() * 10000)
-    bjs = open(bfile, 'w')
-    json.dump(conf, bjs)
-    bjs.close()
 
     # Defer to r.js for actual processing
-    click.echo('#' * 20)
-    click.echo("Optimizing with r.js")
-    rjs = os.path.dirname(__file__) + "/r.js"
-    subprocess.call(["node", rjs, "-o", bfile])
-    os.remove(bfile)
-    if outdir:
-        os.remove(outdir + '/' + bfile)
+    click.echo("Optimizing with r.js...")
+    try:
+        requirejs.optimize(conf)
+    except requirejs.RJSException as e:
+        raise click.ClickException(e.args[0])
+
     click.echo("Optimization complete")
-    click.echo('#' * 20)
+
+
+@wq.command()
+@wq.pass_config
+def babel(config):
+    """
+    Use babel.js to compile ES6/2015+.  Generates ES5-compatible JavaScript for
+    older browsers.  Note that wq babel is run after wq optimize, on the
+    compiled modules created by r.js.  Support for running babel at other
+    stages of the build process may be added in a future version of wq.app.
+    """
+    rconf = config.get('optimize', None)
+    if not rconf:
+        raise click.UsageError(
+            "optimize section not found in %s" % config.filename
+        )
+
+    babel = config.get('babel', {})
+    files = []
+    if 'modules' in rconf and 'dir' in rconf:
+        base_url = rconf.get('baseUrl', '.')
+        for module in rconf['modules']:
+            path = module['name']
+            if path in rconf.get('paths', {}):
+                path = rconf['paths'][path]
+            path = os.path.join(rconf['dir'], base_url, path)
+            files.append(path + '.js')
+
+    for filename in files:
+        label = os.path.normpath(filename)
+        try:
+            with open(filename) as f:
+                content = f.read()
+        except OSError:
+            raise click.ClickException(
+                "Error loading %s - run wq optimize first?" % label
+            )
+        try:
+            print("Transforming %s with Babel..." % label)
+            output = babeljs.transform_string(content, **babel)
+        except babeljs.TransformError as e:
+            raise click.ClickException(e.args[0])
+        with open(filename, 'w') as f:
+            f.write(output)
 
 
 @wq.command()

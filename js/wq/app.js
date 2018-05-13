@@ -134,7 +134,7 @@ app.init = function(config) {
             return ds.get('/config').then(function(wq_config) {
                 app.wq_config = wq_config;
                 tmpl.setDefault('wq_config', app.wq_config);
-                $('body').trigger('login');
+                $('body').trigger('login', ['wq_init']);
                 return csrfReady;
             });
         });
@@ -1448,7 +1448,7 @@ function _saveLogin(result) {
         ds.set('user', user),
         _setCSRFToken(csrftoken)
     ]).then(function() {
-        $('body').trigger('login');
+        $('body').trigger('login', ['wq_save_login']);
     });
 }
 

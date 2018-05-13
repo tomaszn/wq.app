@@ -444,8 +444,12 @@ function _Outbox(store) {
                         } else {
                             var fake_jqxhr = {
                                 status: batchResult.status_code,
-                                responseText: JSON.parse(batchResult.body)['detail']
                             };
+                            try {
+                                fake_jqxhr.responseText = JSON.parse(batchResult.body)['detail'];
+                            } catch (e) {
+                                fake_jqxhr.responseText = batchResult.body;
+                            }
                             return self._sendItemErrorProcess(fake_jqxhr, item, true);
                         }
                     };

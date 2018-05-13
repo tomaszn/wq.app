@@ -409,7 +409,7 @@ function _Outbox(store) {
         }
 
         // Use current CSRF token in case it's changed since item was saved
-        var csrftoken = self.csrftoken || options.csrftoken;
+        var csrftoken = self.csrftoken;
 
         var batch_funcs = order.map(function(modelName, index) {
             return items.filter(function(item) {
@@ -485,7 +485,7 @@ function _Outbox(store) {
                     var masterRequest = [];
                     model_items.forEach(function(item) {
                         // Update CSRF token if it changed
-                        item[self.csrftokenField] = csrftoken;
+                        item.data[self.csrftokenField] = csrftoken;
                         masterRequest.push({
                             url: '/' + item.options.url.replace(/\/$/, "") + '.json',
                             method: item.options.method,

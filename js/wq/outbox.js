@@ -456,8 +456,18 @@ function _Outbox(store) {
                 });
 
                 return promiseSerial(funcs).then(function(sentItems) {
-                    console.log('sentItems after batch result processing', sentItems);
-                    // Reload data and return final result
+                    if (self.debugNetwork) {
+                        // print diagnostics and return final result
+                        var debug_array = sentItems.map(function(item) {
+                            return item.id + '/' + item.synced + ':' +
+                                (item.options ? item.options.url : '') +
+                                (item.result ? item.result.id : '');
+                        });
+                        console.log(
+                            'sentItems after batch result processing',
+                            debug_array
+                        );
+                    }
                     return sentItems;
                 });
             }
@@ -755,13 +765,12 @@ function _Outbox(store) {
             return Promise.all(
                 newData.list.map(_updateItemData)
             ).then(function(items) {
-                // I can't debug what happens inside:
-                // Uncaught (in promise) DOMException: Failed to read large IndexedDB value
-                // but without it, it slows down with each item sent,
-                // and eventually uses all memory.
-                // Let's run it in 5% of cases...
+                // Let's run it in 5% of cases, not to slow down too much
                 if (Math.random() < 5/100) {
-                    console.log('padlo na uruchomienie _cleanUpItemData, items.length==' + items.length);
+                    console.log(
+                        'randomly chosen to run _cleanUpItemData',
+                        'items.length == ' + items.length
+                    );
                     _cleanUpItemData(items);
                 }
                 return defaultOverwrite(items);

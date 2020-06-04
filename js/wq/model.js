@@ -145,6 +145,8 @@ function Model(config) {
         _group_cache = {};
     }
 
+    self.resetCaches = resetCaches;
+
     self.load = function() {
         return getPage(null, self.store.get);
     };

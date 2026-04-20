@@ -59,6 +59,20 @@ package_data = []
 for folder in ['js', 'css', 'scss']:
     package_data.extend(list_package_data(folder))
 
+dependencies = [
+    'wq.core',
+    'pyScss>=1.3',
+    'PyYAML',
+    'requests',
+    'pystache',
+    'Pillow',
+    'requirejs>=0.2.0',
+    'PyBabeljs',
+]
+# skip installing abandoned compass-stylesheets dependency
+if not os.getenv("SKIP_COMPASS_STYLESHEETS"):
+    dependencies.append('compass-stylesheets==0.12.6')
+
 setup(
     name='wq.app',
     version='1.1.1-dev',
@@ -74,17 +88,7 @@ setup(
     package_data={
         'wq.app': package_data
     },
-    install_requires=[
-        'wq.core',
-        'pyScss>=1.3',
-        'compass-stylesheets==0.12.6',
-        'PyYAML',
-        'requests',
-        'pystache',
-        'Pillow',
-        'requirejs>=0.2.0',
-        'PyBabeljs',
-    ],
+    install_requires=dependencies,
     namespace_packages=['wq'],
     description=LONG_DESCRIPTION.strip(),
     long_description=parse_markdown_readme(),
